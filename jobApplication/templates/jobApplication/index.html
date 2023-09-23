@@ -1,0 +1,25 @@
+{% extends 'jobApplication/base.html' %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Application Form</title>
+</head>
+<body>
+    <h1>Job Application Form</h1>
+    {% block content %}
+    <div class="container centered-form"> 
+        <form method="post" action="{% url 'jobApp' %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form.as_ul }}
+            <button type="submit" class="btn btn-primary">Submit Application</button>
+            {% comment %} <ul class="errorlist">
+                {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul> {% endcomment %}
+            
+        </form>
+    </div>
+    {% endblock %}
+</body>
+</html>
