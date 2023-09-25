@@ -82,8 +82,9 @@ def form_data(
 
     yield _form_data
 
-@pytest.fixture
-def remaining_allowed_applications(job:'models.Jobs'):
+
+
+def _allowed_applications(job:'models.Jobs'):
     return (
         models.Applications.objects.filter(job=job)
         .aggregate(
@@ -94,6 +95,8 @@ def remaining_allowed_applications(job:'models.Jobs'):
             )
         )
     )
+
+
 
 @pytest.fixture
 def request_factory() -> RequestFactory:
@@ -120,14 +123,18 @@ def post_requests(request_factory: RequestFactory, url: Literal['jobApplication/
 
     return _post_requests
 
+@pytest.fixture
+def create_post_request(request_factory: RequestFactory, url: Literal['jobApplication/']):
+    def _a_post_request(data):
+        return request_factory.post(url, data=data)
+
+    return _a_post_request
+
 @pytest.fixture(params=[1, 2])
 def client(request):
     return test.Client()
 
 
-def get_fields_and_expected_initials(empty_form:'forms.JobApplicationForm'):
-    for field in empty_form.fields:
-        yield field, empty_form.fields[field].initial
 
 def is_successful_response(response):
     if status.is_redirect(response.status_code):
@@ -162,10 +169,22 @@ def test_initial_get(client: test.Client, initial_get_request):
 
     
 
-    
+@pytest.mark.django_db    
 def test_posts(client: test.Client, form_data, 
-               initial_get_request):
+               initial_get_request,
+               create_post_request):
     response = client.get(initial_get_request)
+    for form_d in form_data():
+        job:'models.Jobs' = form_d['job']
+        response = client.post(create_post_request(data=form_d))
+        if _allowed_applications(job) <= 0:
+            # Expect error when posting
+            assert not is_successful_response(response)
+
+        else:
+            assert is_successful_response(response)
+            response = client.get(initial_get_request)
+
     
     
 
@@ -175,14 +194,6 @@ def test_posts(client: test.Client, form_data,
 
     
 
-
-@pytest.mark.django_db
-def test_correct_posts(post_requests):
-    for post_request in post_requests():
-        response = test.Client().post(post_request)
-        
-        assert status.is_redirect(response.status_code)
-        assert response.url == '/jobApplication/form_submission_success.html/'
 
 
 

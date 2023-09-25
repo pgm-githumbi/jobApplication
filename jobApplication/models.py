@@ -19,7 +19,7 @@ class Companies(models.Model):
 class Jobs(models.Model):
     title = models.TextField()
     company = models.ForeignKey(to=Companies, on_delete=models.CASCADE)
-    date_posted = models.DateTimeField()
+    date_posted = models.DateTimeField(default=timezone.now)
     max_applications = models.IntegerField()
     def __str__(self) -> str:
         return f"{self.title} at {str(self.company)}"
