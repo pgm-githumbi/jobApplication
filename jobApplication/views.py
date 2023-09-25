@@ -1,11 +1,12 @@
 
-from sqlite3 import DatabaseError
+import logging
+from sqlite3 import DatabaseError, IntegrityError
 from typing import Callable
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from .models import Applicant, Applications, Jobs, Companies, available_jobs
 from .forms import JobApplicationForm, JobApplicationFormBuilder
-from django.db import models, transaction
+from django.db import DataError, Error, OperationalError, models, transaction
 from django.urls import reverse
 
 
@@ -38,13 +39,15 @@ def index(request):
     print('New Form Request: ',form.fields['job'].choices, '\n')
     return render(request, template_name, {'form' : form})
 
-def save_form(form:'JobApplicationForm', is_repeat_application:'Callable'=None):
-    email = form.cleaned_data['email']
-    first_name = form.cleaned_data['first_name']
-    last_name = form.cleaned_data['other_name']
-    job = form.cleaned_data['job']
+def save_form(form:'JobApplicationForm', is_repeat_application:'Callable'=None,
+              test_data=None):
+    cleaned_data = test_data or form.cleaned_data
+    email = cleaned_data['email']
+    first_name = cleaned_data['first_name']
+    last_name = cleaned_data['other_name']
+    job = cleaned_data['job']
     job = Jobs.objects.get(pk=job)
-    resume = form.cleaned_data['resume']
+    resume = cleaned_data['resume']
     try:
         with transaction.atomic():
             applicant, _ = Applicant.objects.get_or_create(
@@ -55,14 +58,27 @@ def save_form(form:'JobApplicationForm', is_repeat_application:'Callable'=None):
             application, created = Applications.objects.get_or_create(
                 applicant=applicant, job=job, defaults={'resume_text' : resume}
             )
-    except DatabaseError as e:
-        form.add_error(None, 'Something went wrong. The application was not stored')
+    except (DataError, IntegrityError, ) as e:
+        if form:
+            form.add_error(None, 'Something went wrong. The application was not stored')
+        return False
+    except OperationalError as e:
+        logging.warning(e)
+        if form:
+            form.add_error(None, 'Something went wrong. The application was not stored')
+        return False
+    except Error as e:
+        logging.warning(e)
+        if form:
+            form.add_error(None, 'Something went wrong. The application was not stored')
         return False
     
     
     
     if not created:
-        form.add_error(None, 'This application was already submitted')
+        if form:
+            form.add_error(None, 'This application was already submitted')
+        print(f'This application was already submitted')
     if not created and is_repeat_application != None:
         is_repeat_application()
     return True
